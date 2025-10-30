@@ -10,7 +10,7 @@ from datetime import datetime
 st.set_page_config(page_title="AI Diet Coach", layout="wide")
 
 # ---------------------------
-# Helper: load datasets
+# Load Data from GitHub
 # ---------------------------
 @st.cache_data(show_spinner=False)
 def load_data():
@@ -43,7 +43,7 @@ MACRO_MAP = {
 }
 
 # ---------------------------
-# Extract cuisines and diseases
+# Extract Cuisines & Diseases
 # ---------------------------
 def get_unique_sorted(col):
     if col in data.columns:
@@ -64,7 +64,7 @@ if "Disease" in data.columns:
 diseases_list = sorted(disease_set)
 
 # ---------------------------
-# UI: sidebar inputs
+# Sidebar Inputs
 # ---------------------------
 st.sidebar.title("🔧 User Inputs")
 age = st.sidebar.number_input("Age", min_value=1, max_value=120, value=25)
@@ -75,7 +75,7 @@ activity = st.sidebar.selectbox("Activity Level", ["Sedentary", "Lightly Active"
 diet_type = st.sidebar.selectbox("Diet Type", ["Vegetarian", "Non-Vegetarian"])
 cuisine_pref = st.sidebar.selectbox("Cuisine Preference", ["Any"] + cuisines)
 selected_diseases = st.sidebar.multiselect("Diseases (select all that apply)", options=diseases_list)
-allergy_text = st.sidebar.text_input("Allergies (comma-separated keywords)", value="")
+allergy_text = st.sidebar.text_input("Allergies (comma-separated)", value="")
 plan_days = st.sidebar.slider("Plan duration (days)", min_value=7, max_value=30, value=7, step=1)
 
 st.sidebar.markdown("---")
@@ -83,7 +83,7 @@ generate_btn = st.sidebar.button("Generate Meal Plan")
 download_btn_placeholder = st.sidebar.empty()
 
 # ---------------------------
-# Core filtering and substitution functions
+# Helper Functions
 # ---------------------------
 def parse_allergies(text):
     return [a.strip().lower() for a in text.split(",") if a.strip()]
@@ -133,18 +133,13 @@ def substitute_meal_if_allergy(meal_text, allergy_list, pool_texts):
     return meal_text, False
 
 # ---------------------------
-# Meal plan generation
+# Build Plan
 # ---------------------------
 def build_plan(df_available, days, diet_type, allergies):
     allergy_list = parse_allergies(allergies)
     plan_rows = []
     used_indices = set()
-    pool_meal_texts = []
-    for idx, row in df_available.iterrows():
-        combined_meals = " | ".join([str(row.get(c, "")) for c in MEAL_COLS])
-        pool_meal_texts.append(combined_meals)
-    if not pool_meal_texts:
-        pool_meal_texts = ["Mixed salad", "Oatmeal", "Grilled vegetables"]
+    pool_meal_texts = ["Mixed salad", "Oatmeal", "Grilled veggies", "Fruit bowl"]
 
     for day in range(days):
         choices = [i for i in df_available.index if i not in used_indices]
@@ -165,7 +160,7 @@ def build_plan(df_available, days, diet_type, allergies):
         else:
             for col in MEAL_COLS:
                 meal_text = sample_row.get(col, "N/A")
-                sub, substituted = substitute_meal_if_allergy(meal_text, allergy_list, pool_meal_texts)
+                sub, _ = substitute_meal_if_allergy(meal_text, allergy_list, pool_meal_texts)
                 day_plan[col] = sub
 
         day_macros = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
@@ -173,10 +168,10 @@ def build_plan(df_available, days, diet_type, allergies):
             macros = MACRO_MAP.get(col, [])
             if sample_row is not None and all((m in sample_row) for m in macros):
                 try:
-                    day_macros["calories"] += float(sample_row[macros[0]] if pd.notna(sample_row[macros[0]]) else 0)
-                    day_macros["protein"] += float(sample_row[macros[1]] if pd.notna(sample_row[macros[1]]) else 0)
-                    day_macros["carbs"] += float(sample_row[macros[2]] if pd.notna(sample_row[macros[2]]) else 0)
-                    day_macros["fat"] += float(sample_row[macros[3]] if pd.notna(sample_row[macros[3]]) else 0)
+                    day_macros["calories"] += float(sample_row[macros[0]] or 0)
+                    day_macros["protein"] += float(sample_row[macros[1]] or 0)
+                    day_macros["carbs"] += float(sample_row[macros[2]] or 0)
+                    day_macros["fat"] += float(sample_row[macros[3]] or 0)
                 except Exception:
                     pass
 
@@ -188,15 +183,14 @@ def build_plan(df_available, days, diet_type, allergies):
             "carbs": round(day_macros["carbs"], 1),
             "fat": round(day_macros["fat"], 1)
         })
-    plan_df = pd.DataFrame(plan_rows)
-    return plan_df
+    return pd.DataFrame(plan_rows)
 
 # ---------------------------
-# Weight projection helper
+# Weight Projection
 # ---------------------------
 def estimate_weight_change(current_weight_kg, avg_daily_cal, days, activity_level):
     activity_mult = {"Sedentary": 1.2, "Lightly Active": 1.375, "Moderately Active": 1.55, "Very Active": 1.725}
-    bmr = 10 * current_weight_kg + 6.25 * (height_cm) - 5 * age + (5 if gender == "Male" else -161)
+    bmr = 10 * current_weight_kg + 6.25 * height_cm - 5 * age + (5 if gender == "Male" else -161)
     maintenance = bmr * activity_mult.get(activity_level, 1.2)
     daily_deficit = maintenance - avg_daily_cal
     total_deficit = daily_deficit * days
@@ -204,11 +198,11 @@ def estimate_weight_change(current_weight_kg, avg_daily_cal, days, activity_leve
     return weight_change_kg, maintenance
 
 # ---------------------------
-# Main action
+# Main Logic
 # ---------------------------
 if generate_btn:
     st.title("🍎 AI Diet Coach — Generated Plan")
-    with st.spinner("Filtering meals and generating plan..."):
+    with st.spinner("Generating your custom meal plan..."):
         allergy_list = parse_allergies(allergy_text)
         df = data.copy()
 
@@ -228,26 +222,41 @@ if generate_btn:
         }), use_container_width=True)
 
         # ---------------------------
-        # Compact Average Daily Macros Chart
+        # Compact Side-by-Side Graphs
         # ---------------------------
         avg_cal = plan_df["calories"].mean()
         avg_prot = plan_df["protein"].mean()
         avg_carbs = plan_df["carbs"].mean()
         avg_fat = plan_df["fat"].mean()
-        st.markdown("### 📊 Average Daily Macros")
-        fig, ax = plt.subplots(figsize=(5, 2.8))  # reduced size
-        nutrients = ['Calories','Protein','Carbs','Fat']
-        vals = [avg_cal, avg_prot, avg_carbs, avg_fat]
-        ax.bar(nutrients, vals, color=['#ff9999','#66b3ff','#99ff99','#ffcc99'])
-        ax.set_ylabel("Amount")
-        st.pyplot(fig)
+        bmi = weight / ((height_cm/100)**2)
+        change_kg, maintenance = estimate_weight_change(weight, avg_cal, plan_days, activity)
+        projected = weight + change_kg
+        days_range = np.arange(0, plan_days+1)
+        weight_trend = weight + (change_kg/plan_days) * days_range
+
+        col_macro, col_weight = st.columns(2)
+        with col_macro:
+            st.markdown("### 📊 Average Daily Macros")
+            fig, ax = plt.subplots(figsize=(4.5, 2.8))
+            nutrients = ['Calories', 'Protein', 'Carbs', 'Fat']
+            vals = [avg_cal, avg_prot, avg_carbs, avg_fat]
+            ax.bar(nutrients, vals, color=['#ff9999','#66b3ff','#99ff99','#ffcc99'])
+            ax.set_ylabel("Amount")
+            st.pyplot(fig)
+
+        with col_weight:
+            st.markdown("### ⚖️ Projected Weight Trend")
+            fig2, ax2 = plt.subplots(figsize=(4.5, 2.8))
+            ax2.plot(days_range, weight_trend, marker='o')
+            ax2.set_xlabel("Day")
+            ax2.set_ylabel("Weight (kg)")
+            st.pyplot(fig2)
 
         # ---------------------------
-        # BMI and Weight Projection
+        # BMI & Summary
         # ---------------------------
-        bmi = weight / ((height_cm/100)**2)
-        st.markdown("### ⚖️ BMI & Weight Projection")
-        col1, col2 = st.columns([1,2])
+        st.markdown("### 🧍 BMI & Maintenance Summary")
+        col1, col2 = st.columns(2)
         with col1:
             st.write(f"**BMI:** {bmi:.1f}")
             if bmi < 18.5:
@@ -259,27 +268,16 @@ if generate_btn:
             else:
                 st.error("Obese")
         with col2:
-            change_kg, maintenance = estimate_weight_change(weight, avg_cal, plan_days, activity)
-            projected = weight + change_kg
             st.write(f"Estimated maintenance calories: {maintenance:.0f} kcal/day")
-            st.write(f"Estimated weight change in {plan_days} days: {change_kg:+.2f} kg → projected weight: {projected:.1f} kg")
-
-            days_range = np.arange(0, plan_days+1)
-            weight_trend = weight + (change_kg/plan_days) * days_range
-            fig2, ax2 = plt.subplots(figsize=(5, 2.8))
-            ax2.plot(days_range, weight_trend, marker='o')
-            ax2.set_xlabel("Day")
-            ax2.set_ylabel("Weight (kg)")
-            ax2.set_title("Projected Weight Trend (Estimate)")
-            st.pyplot(fig2)
+            st.write(f"Expected weight change in {plan_days} days: {change_kg:+.2f} kg → projected weight: {projected:.1f} kg")
 
         # ---------------------------
         # Precautions & Download
         # ---------------------------
         st.markdown("### ⚠️ Precautions & Tips")
-        st.write("- If you experience allergic reactions or severe symptoms, stop immediately and consult a physician.")
-        st.write("- Follow the plan consistently for at least 2–4 weeks to observe changes.")
-        st.write(f"- Tip: {random.choice(['Stay hydrated','Include fiber-rich veggies','Prefer whole grains','Avoid processed snacks'])}")
+        st.write("- If you experience any allergic reaction, stop immediately and consult a doctor.")
+        st.write("- Follow the plan consistently for 2–4 weeks for visible results.")
+        st.write(f"- Tip: {random.choice(['Stay hydrated', 'Include fiber-rich foods', 'Avoid sugary snacks', 'Prefer homemade meals'])}")
 
         csv_buf = io.StringIO()
         plan_df.to_csv(csv_buf, index=False)
@@ -288,15 +286,16 @@ if generate_btn:
         filename = f"meal_plan_{now}.csv"
         download_btn_placeholder.download_button(label="⬇️ Download Meal Plan (CSV)", data=csv_bytes, file_name=filename, mime="text/csv")
 
-        st.success("Meal plan generated — download or print this page for offline use.")
+        st.success("Meal plan generated successfully!")
 
 else:
     st.title("🍎 AI Diet Coach")
-    st.markdown(
-        """
-        Welcome — configure user inputs on the left sidebar and click **Generate Meal Plan**.
-        This app suggests diet plans tailored to your health conditions, dietary preferences,
-        and cuisine style. It provides macros, BMI tracking, and downloadable CSV for easy use.
-        """
-    )
-    st.info("Tip: Use the 'Allergies' field to enter ingredients to avoid (comma-separated), e.g. 'peanut, shellfish'.")
+    st.markdown("""
+    Welcome! Configure your details in the sidebar and click **Generate Meal Plan**.
+    This app provides balanced diet suggestions based on your:
+    - Age, gender, activity level, and weight goals  
+    - Diseases, allergies, and cuisine preferences  
+    - Veg/Non-veg diet type  
+    Includes **BMI tracking**, **macronutrient graphs**, and **downloadable meal plan**!
+    """)
+    st.info("💡 Tip: Enter allergy items like `peanut, shellfish` to exclude them from meal suggestions.")
