@@ -200,7 +200,7 @@ def make_pdf_table(df):
 # Generate
 # ---------------------------
 if generate_btn:
-    st.title("🍎 AI Diet Coach — Generated Plan")
+    st.title("🍽️ AI Diet Coach — Generated Plan")
 
     with st.spinner("Generating your meal plan..."):
         df = data.copy()
