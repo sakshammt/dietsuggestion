@@ -2,7 +2,6 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from IPython.display import clear_output
 
 # -----------------------------
 # 1️⃣ Load your data
@@ -21,7 +20,7 @@ meal_columns = ["Breakfast Suggestion", "Lunch Suggestion", "Dinner Suggestion",
 # 2️⃣ Title
 # -----------------------------
 st.title("🍎 AI Diet Suggestion System")
-st.write("Personalized meal plans based on age, weight, activity level, and diseases.")
+st.write("Personalized meal plans based on age, weight, activity level, diet type, and diseases.")
 
 # -----------------------------
 # 3️⃣ Input Section
@@ -93,15 +92,14 @@ if st.button("Get Meal Suggestions"):
         st.write("---")
 
     # -----------------------------
-    # 6️⃣ BMI & Small Graph
+    # 6️⃣ BMI & Compact Graph
     # -----------------------------
     height_m = 1.7  # assumed average height
     bmi = round(weight / (height_m ** 2), 2)
     st.metric("💪 Your BMI", bmi)
 
-    # Small Macro chart
     st.markdown("### 📊 Average Daily Macros")
-    fig, ax = plt.subplots(figsize=(4, 2.5))  # compact chart
+    fig, ax = plt.subplots(figsize=(4, 2.5))  # small, compact chart
     macros = {"Carbs": 50, "Protein": 30, "Fats": 20}
     ax.bar(macros.keys(), macros.values(), color=["#4CAF50", "#2196F3", "#FFC107"])
     ax.set_ylabel("%")
@@ -113,10 +111,9 @@ if st.button("Get Meal Suggestions"):
     # -----------------------------
     st.markdown("### ⚠️ Precautions:")
     st.markdown("""
-    - Stay hydrated and eat at consistent times.
-    - Avoid skipping meals.
+    - Stay hydrated and eat at consistent times.  
+    - Avoid skipping meals.  
     - If you experience any allergy or discomfort, **consult your doctor** immediately.
     """)
 
     st.success("✅ You can expect visible results within **3–4 weeks** if followed regularly.")
-
